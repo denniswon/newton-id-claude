@@ -54,3 +54,21 @@ Each entry:
 - **What happened**: `supportedChains.ts` only handles chain 11155111 (Sepolia) but `http.ts` defines gateway URLs for Base Sepolia, Base mainnet, and Ethereum mainnet
 - **Why**: Chain support was added to the gateway service but not propagated to the frontend chain config
 - **Rule**: When adding chain support, update both `supportedChains.ts` (chain objects, RPC URLs) and `http.ts` (gateway URLs).
+
+### JSON-RPC id field not set by client
+
+- **What happened**: During code review, the missing `id` field in `jsonRpc.ts` was flagged as a spec violation
+- **Why**: The Newton gateway populates the JSON-RPC `id` server-side — clients should not set it
+- **Rule**: Do not add an `id` field to JSON-RPC payloads in `createJsonRpcRequestPayload`. The gateway assigns it.
+
+### Local `pnpm build` fails but Vercel deploys succeed
+
+- **What happened**: `pnpm build` fails locally on `/_global-error` prerender with `TypeError: Cannot read properties of null (reading 'useContext')`. All Vercel deployments succeed with state READY.
+- **Why**: Next.js 16 Turbopack (local) tries to fully execute `'use client'` components during SSG prerendering. `TurnkeyProvider` calls `useContext` which crashes because React's dispatcher isn't initialized during static generation. Vercel's `@vercel/next` builder patches this by rendering client components as empty shells during SSG, so it never hits the crash.
+- **Rule**: Do not treat the local `pnpm build` failure as a blocker — Vercel deployments are the source of truth. `pnpm dev` works locally. If local production builds are ever needed (e.g., Docker), each page must be restructured as a server component wrapper with `next/dynamic` client import — but this is not needed for Vercel hosting.
+
+### `force-dynamic` on root layout breaks `/_global-error` prerender
+
+- **What happened**: Adding `export const dynamic = 'force-dynamic'` to `layout.tsx` or adding a `(pages)/layout.tsx` with `force-dynamic` causes `/_global-error` to fail prerendering, even though it fixes all other pages.
+- **Why**: `/_global-error` is a special internal Next.js route that is always statically prerendered regardless of `force-dynamic`. Changes to the layout route tree affect how Next.js compiles the error boundary page.
+- **Rule**: Do not use `force-dynamic` on the root layout or route group layouts as a fix for the prerender issue. It creates a whack-a-mole between `/_global-error` and the regular pages.
